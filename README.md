@@ -23,7 +23,7 @@ npm install @slugkit/sdk
 import { SlugKit } from '@slugkit/sdk';
 
 // Create a SlugKit instance
-const slugkit = await SlugKit.fromBackend('https://your-backend.com', 'your-sdk-slug');
+const slugkit = await SlugKit.fromBackend('https://your-backend.com', 'your-sdk-slug', fallbackJwk);
 ```
 
 ### Pattern Parsing
@@ -69,7 +69,7 @@ console.log(tags);
 
 ```typescript
 // Generate random slugs
-const slugs = await slugkit.getRandomSlugs('{noun}', 5);
+const slugs = await slugkit.forgeSlugs('{noun}', 5, undefined, undefined);
 console.log(slugs); // Array of 5 random nouns
 
 // Get pattern info (includes capacity and more details)
@@ -80,19 +80,85 @@ console.log(patternInfo.complexity); // Pattern complexity score
 console.log(patternInfo.components); // Number of components in pattern
 ```
 
+### Advanced Pattern Parsing
+
+For building pattern editors, autocompletion, and suggestion systems:
+
+```typescript
+import { PatternParser } from '@slugkit/sdk';
+
+// Parse partial patterns for autocompletion
+const context = PatternParser.parsePartial('{noun:');
+console.log(context.context); // 'expecting_tag_or_size_limit'
+console.log(context.expectedNext); // ['tag_spec', 'comparison_op', 'option', 'close_brace']
+
+// Check if pattern is complete
+const isComplete = PatternParser.isComplete('{noun}');
+console.log(isComplete); // true
+
+const isIncomplete = PatternParser.isComplete('{noun:');
+console.log(isIncomplete); // false
+
+// Get the valid prefix of a potentially broken pattern
+const validPrefix = PatternParser.getValidPrefix('{noun} {invalid-syntax}');
+console.log(validPrefix); // '{noun} '
+
+// Get expected tokens for suggestions
+const expected = PatternParser.getExpectedNext('{number:5');
+console.log(expected); // ['number_base', 'close_brace']
+```
+
+### Pattern Shortening and Sharing
+
+```typescript
+// Shorten a pattern to a shareable slug
+const shortenRequest = {
+  pattern: '{adjective@en:+positive} {noun@en:+animal}',
+  seed: 'my-seed',
+  sequence: 1
+};
+
+const shortened = await slugkit.shortenPattern(shortenRequest);
+console.log(shortened.slug); // 'abc123'
+
+// Expand the slug back to the original pattern
+const expanded = await slugkit.expandPattern('abc123');
+console.log(expanded.pattern); // '{adjective@en:+positive} {noun@en:+animal}'
+console.log(expanded.seed); // 'my-seed'
+console.log(expanded.sequence); // 1
+```
+
 ## API Reference
 
 ### PatternParser
 
+#### Basic Methods
 - `parse(pattern: string): ParsedPattern` - Parse a pattern string
 - `validate(pattern: string): boolean` - Validate a pattern without throwing
 
+#### Advanced Parsing Helpers
+- `parsePartial(pattern: string): ParserContextInfo` - Parse partial patterns and get context
+- `isComplete(pattern: string): boolean` - Check if pattern is complete and valid
+- `getValidPrefix(pattern: string): string` - Get the valid prefix of a pattern
+- `getExpectedNext(pattern: string): ExpectedToken[]` - Get expected next tokens for suggestions
+
 ### SlugKit
 
+#### Static Methods
+- `fromBackend(backend: string, sdkSlug: string, fallbackJwk?: JsonWebKey): Promise<SlugKit>` - Create SlugKit instance from backend
+- `fromJwk(backend: string, sdkSlug: string, jwk: JsonWebKey): Promise<SlugKit>` - Create SlugKit instance from JWK directly
+
+#### Instance Methods
 - `fetchDictionaries(): Promise<DictionaryStats[]>` - Get dictionary statistics
+- `getDictionaries(): Promise<DictionaryStats[]>` - Get dictionary statistics with caching
 - `fetchDictionaryTags(): Promise<DictionaryTag[]>` - Get dictionary tags
-- `getRandomSlugs(pattern: string, count: number, seed?: string, sequence?: number): Promise<string[]>`
-- `getPatternInfo(pattern: string): Promise<PatternInfo>`
+- `getDictionaryTags(): Promise<DictionaryTag[]>` - Get dictionary tags with caching
+- `forgeSlugs(pattern: string, count: number, seed?: string, sequence?: number): Promise<string[]>` - Generate random slugs
+- `getPatternInfo(pattern: string): Promise<PatternInfo>` - Get pattern information
+- `checkCapacity(pattern: string): Promise<number>` - Check pattern capacity (deprecated)
+- `shortenPattern(request: ShortenPatternRequest): Promise<ShortenPatternResponse>` - Shorten pattern to slug
+- `expandPattern(slug: string): Promise<ShortenPatternRequest>` - Expand shortened slug
+- `getStatsTotal(): Promise<StatsData[]>` - Get service-wide statistics
 
 ## Types
 
@@ -123,6 +189,45 @@ interface PatternInfo {
   max_slug_length: number;
   complexity: number;
   components: number;
+}
+```
+
+### ShortenPatternRequest
+```typescript
+interface ShortenPatternRequest {
+  pattern: string;
+  seed?: string;
+  sequence?: number;
+}
+```
+
+### ShortenPatternResponse
+```typescript
+interface ShortenPatternResponse {
+  slug: string;
+}
+```
+
+### ParserContextInfo
+```typescript
+interface ParserContextInfo {
+  context: ParserContext;
+  position: number;
+  parsedSoFar: string;
+  expectedNext: ExpectedToken[];
+  lastParsedToken?: string;
+  isValid: boolean;
+  errorMessage?: string;
+  partialElement?: any;
+}
+```
+
+### ParsedPattern
+```typescript
+interface ParsedPattern {
+  elements: PatternElement[];
+  globalSettings?: GlobalSettings;
+  textChunks: string[];
 }
 ```
 
