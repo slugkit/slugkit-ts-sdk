@@ -22,8 +22,14 @@ npm install @slugkit/sdk
 ```typescript
 import { SlugKit } from '@slugkit/sdk';
 
-// Create a SlugKit instance
-const slugkit = await SlugKit.fromBackend('https://your-backend.com', 'your-sdk-slug', fallbackJwk);
+// Create a SlugKit instance with API key (recommended for MCP servers)
+const slugkit = SlugKit.fromApiKey('https://your-backend.com', 'your-api-key');
+
+// Or create from JWK for SDK authentication
+const slugkit = await SlugKit.fromJwk('https://your-backend.com', 'your-sdk-slug', jwkObject);
+
+// Or use automatic key fetching from backend
+const slugkit = await SlugKit.fromBackend('https://your-backend.com', 'your-sdk-slug');
 ```
 
 ### Pattern Parsing
@@ -43,16 +49,16 @@ console.log(isValid); // true/false
 ### Dictionary Management
 
 ```typescript
-// Fetch dictionary statistics
-const stats = await slugkit.fetchDictionaries();
+// Get dictionary statistics (cached after first call)
+const stats = await slugkit.getDictionaries();
 console.log(stats);
 // [
-//   { kind: 'noun', count: 1000 },
-//   { kind: 'adjective', count: 500 }
+//   { kind: 'noun', lang: 'en', word_count: 1000, tag_count: 15 },
+//   { kind: 'adjective', lang: 'en', word_count: 500, tag_count: 12 }
 // ]
 
-// Fetch dictionary tags
-const tags = await slugkit.fetchDictionaryTags();
+// Get dictionary tags (cached after first call)
+const tags = await slugkit.getDictionaryTags();
 console.log(tags);
 // [
 //   {
@@ -63,14 +69,30 @@ console.log(tags);
 //     word_count: 100
 //   }
 // ]
+
+// Force fresh data (bypass cache)
+const freshStats = await slugkit.fetchDictionaries();
+const freshTags = await slugkit.fetchDictionaryTags();
 ```
 
 ### ID Generation
 
 ```typescript
-// Generate random slugs
-const slugs = await slugkit.forgeSlugs('{noun}', 5, undefined, undefined);
+// Generate random slugs using forge
+const slugs = await slugkit.forgeSlugs('{noun}', 5);
 console.log(slugs); // Array of 5 random nouns
+
+// Generate with seed for reproducible results
+const deterministicSlugs = await slugkit.forgeSlugs('{noun}', 3, 'my-seed');
+
+// Generate with sequence offset
+const offsetSlugs = await slugkit.forgeSlugs('{noun}', 2, undefined, 100);
+
+// Mint slugs from a series (if available)
+const mintedSlugs = await slugkit.mintSlugs('my-series', 5);
+
+// Slice slugs (dry-run preview)
+const slicedSlugs = await slugkit.sliceSlugs('my-series', 3, 1000, 0);
 
 // Get pattern info (includes capacity and more details)
 const patternInfo = await slugkit.getPatternInfo('{noun}');
@@ -80,85 +102,31 @@ console.log(patternInfo.complexity); // Pattern complexity score
 console.log(patternInfo.components); // Number of components in pattern
 ```
 
-### Advanced Pattern Parsing
-
-For building pattern editors, autocompletion, and suggestion systems:
-
-```typescript
-import { PatternParser } from '@slugkit/sdk';
-
-// Parse partial patterns for autocompletion
-const context = PatternParser.parsePartial('{noun:');
-console.log(context.context); // 'expecting_tag_or_size_limit'
-console.log(context.expectedNext); // ['tag_spec', 'comparison_op', 'option', 'close_brace']
-
-// Check if pattern is complete
-const isComplete = PatternParser.isComplete('{noun}');
-console.log(isComplete); // true
-
-const isIncomplete = PatternParser.isComplete('{noun:');
-console.log(isIncomplete); // false
-
-// Get the valid prefix of a potentially broken pattern
-const validPrefix = PatternParser.getValidPrefix('{noun} {invalid-syntax}');
-console.log(validPrefix); // '{noun} '
-
-// Get expected tokens for suggestions
-const expected = PatternParser.getExpectedNext('{number:5');
-console.log(expected); // ['number_base', 'close_brace']
-```
-
-### Pattern Shortening and Sharing
-
-```typescript
-// Shorten a pattern to a shareable slug
-const shortenRequest = {
-  pattern: '{adjective@en:+positive} {noun@en:+animal}',
-  seed: 'my-seed',
-  sequence: 1
-};
-
-const shortened = await slugkit.shortenPattern(shortenRequest);
-console.log(shortened.slug); // 'abc123'
-
-// Expand the slug back to the original pattern
-const expanded = await slugkit.expandPattern('abc123');
-console.log(expanded.pattern); // '{adjective@en:+positive} {noun@en:+animal}'
-console.log(expanded.seed); // 'my-seed'
-console.log(expanded.sequence); // 1
-```
-
 ## API Reference
 
 ### PatternParser
 
-#### Basic Methods
 - `parse(pattern: string): ParsedPattern` - Parse a pattern string
 - `validate(pattern: string): boolean` - Validate a pattern without throwing
 
-#### Advanced Parsing Helpers
-- `parsePartial(pattern: string): ParserContextInfo` - Parse partial patterns and get context
-- `isComplete(pattern: string): boolean` - Check if pattern is complete and valid
-- `getValidPrefix(pattern: string): string` - Get the valid prefix of a pattern
-- `getExpectedNext(pattern: string): ExpectedToken[]` - Get expected next tokens for suggestions
-
 ### SlugKit
 
-#### Static Methods
-- `fromBackend(backend: string, sdkSlug: string, fallbackJwk?: JsonWebKey): Promise<SlugKit>` - Create SlugKit instance from backend
-- `fromJwk(backend: string, sdkSlug: string, jwk: JsonWebKey): Promise<SlugKit>` - Create SlugKit instance from JWK directly
+#### Static Factory Methods
+- `SlugKit.fromApiKey(backend: string, apiKey: string): SlugKit` - Create instance with API key
+- `SlugKit.fromJwk(backend: string, sdkSlug: string, jwk: JsonWebKey): Promise<SlugKit>` - Create from JWK
+- `SlugKit.fromBackend(backend: string, sdkSlug: string): Promise<SlugKit>` - Create with auto key fetching
 
-#### Instance Methods
-- `fetchDictionaries(): Promise<DictionaryStats[]>` - Get dictionary statistics
-- `getDictionaries(): Promise<DictionaryStats[]>` - Get dictionary statistics with caching
-- `fetchDictionaryTags(): Promise<DictionaryTag[]>` - Get dictionary tags
-- `getDictionaryTags(): Promise<DictionaryTag[]>` - Get dictionary tags with caching
+#### Dictionary Methods
+- `getDictionaries(): Promise<DictionaryStats[]>` - Get dictionary statistics (cached)
+- `getDictionaryTags(): Promise<DictionaryTag[]>` - Get dictionary tags (cached)
+- `fetchDictionaries(): Promise<DictionaryStats[]>` - Get dictionary statistics (fresh)
+- `fetchDictionaryTags(): Promise<DictionaryTag[]>` - Get dictionary tags (fresh)
+
+#### Generation Methods
 - `forgeSlugs(pattern: string, count: number, seed?: string, sequence?: number): Promise<string[]>` - Generate random slugs
-- `getPatternInfo(pattern: string): Promise<PatternInfo>` - Get pattern information
-- `checkCapacity(pattern: string): Promise<number>` - Check pattern capacity (deprecated)
-- `shortenPattern(request: ShortenPatternRequest): Promise<ShortenPatternResponse>` - Shorten pattern to slug
-- `expandPattern(slug: string): Promise<ShortenPatternRequest>` - Expand shortened slug
-- `getStatsTotal(): Promise<StatsData[]>` - Get service-wide statistics
+- `mintSlugs(seriesSlug?: string, count: number, batchSize?: number): Promise<string[]>` - Mint from series
+- `sliceSlugs(seriesSlug?: string, count: number, batchSize?: number, sequence?: number): Promise<string[]>` - Slice preview
+- `getPatternInfo(pattern: string): Promise<PatternInfo>` - Get pattern analysis
 
 ## Types
 
@@ -166,7 +134,9 @@ console.log(expanded.sequence); // 1
 ```typescript
 interface DictionaryStats {
   kind: string;
-  count: number;
+  lang: string;
+  word_count: number;
+  tag_count: number;
 }
 ```
 
@@ -192,45 +162,6 @@ interface PatternInfo {
 }
 ```
 
-### ShortenPatternRequest
-```typescript
-interface ShortenPatternRequest {
-  pattern: string;
-  seed?: string;
-  sequence?: number;
-}
-```
-
-### ShortenPatternResponse
-```typescript
-interface ShortenPatternResponse {
-  slug: string;
-}
-```
-
-### ParserContextInfo
-```typescript
-interface ParserContextInfo {
-  context: ParserContext;
-  position: number;
-  parsedSoFar: string;
-  expectedNext: ExpectedToken[];
-  lastParsedToken?: string;
-  isValid: boolean;
-  errorMessage?: string;
-  partialElement?: any;
-}
-```
-
-### ParsedPattern
-```typescript
-interface ParsedPattern {
-  elements: PatternElement[];
-  globalSettings?: GlobalSettings;
-  textChunks: string[];
-}
-```
-
 ## Pattern Grammar
 
 The SDK supports the full SlugKit EBNF grammar for patterns:
@@ -246,13 +177,22 @@ The SDK provides comprehensive error handling:
 
 ```typescript
 try {
-  const result = await slugkit.fetchDictionaries();
+  const result = await slugkit.getDictionaries();
 } catch (error) {
   if (error.message.includes('Authentication failed')) {
-    // Handle auth errors
+    // Handle auth errors - may trigger automatic key refresh
   } else if (error.message.includes('Network error')) {
     // Handle network errors
+  } else if (error.message.includes('Rate limit')) {
+    // Handle rate limiting
   }
+}
+
+// Pattern validation errors
+try {
+  const info = await slugkit.getPatternInfo('{invalid-pattern}');
+} catch (error) {
+  console.log('Pattern validation failed:', error.message);
 }
 ```
 

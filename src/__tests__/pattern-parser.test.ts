@@ -1,4 +1,104 @@
-import { PatternParser, CompareOperator, NumberBase } from '../pattern-parser';
+import { PatternParser } from '../pattern-parser';
+import { NumberBase, CompareOperator } from '../parser-types';
+
+describe('PatternParser - space-separated options', () => {
+  it('parses selector with tags and options', () => {
+    const pattern = '{emoji:+face count=5 unique=true}';
+    const parsed = PatternParser.parse(pattern);
+
+    expect(parsed.elements).toHaveLength(1);
+    const sel = parsed.elements[0] as any;
+    expect(sel.kind).toBe('emoji');
+    expect(sel.includeTags).toEqual(['face']);
+    expect(sel.excludeTags).toEqual([]);
+    expect(sel.sizeLimit).toBeUndefined();
+    expect(sel.options).toEqual({ count: '5', unique: 'true' });
+  });
+
+  it('parses selector with only options (no tags/size)', () => {
+    const pattern = '{emoji: count=3}';
+    const parsed = PatternParser.parse(pattern);
+
+    expect(parsed.elements).toHaveLength(1);
+    const sel = parsed.elements[0] as any;
+    expect(sel.kind).toBe('emoji');
+    expect(sel.includeTags).toEqual([]);
+    expect(sel.excludeTags).toEqual([]);
+    expect(sel.sizeLimit).toBeUndefined();
+    expect(sel.options).toEqual({ count: '3' });
+  });
+
+  it('parses selector with options without whitespace after colon', () => {
+    const pattern = '{emoji:count=5}';
+    const parsed = PatternParser.parse(pattern);
+
+    expect(parsed.elements).toHaveLength(1);
+    const sel = parsed.elements[0] as any;
+    expect(sel.kind).toBe('emoji');
+    expect(sel.includeTags).toEqual([]);
+    expect(sel.excludeTags).toEqual([]);
+    expect(sel.sizeLimit).toBeUndefined();
+    expect(sel.options).toEqual({ count: '5' });
+  });
+
+  // emoji does not support size constraints
+  it('rejects size constraint for emoji selector', () => {
+    expect(() => PatternParser.parse('{emoji:>=3 unique=true}')).toThrow();
+  });
+
+  it('parses selector with language and options', () => {
+    // emoji must not accept language
+    expect(() => PatternParser.parse('{emoji@en: count=2}')).toThrow();
+  });
+
+  it('parses emoji selector with count range', () => {
+    const pattern = '{emoji:count=2-4}';
+    const parsed = PatternParser.parse(pattern);
+
+    expect(parsed.elements).toHaveLength(1);
+    const sel = parsed.elements[0] as any;
+    expect(sel.kind).toBe('emoji');
+    expect(sel.includeTags).toEqual([]);
+    expect(sel.excludeTags).toEqual([]);
+    expect(sel.sizeLimit).toBeUndefined();
+    expect(sel.options).toEqual({ count: '2-4' });
+  });
+
+  it('parses emoji selector with tags and count range', () => {
+    const pattern = '{emoji:+face count=1-3 unique=true}';
+    const parsed = PatternParser.parse(pattern);
+
+    expect(parsed.elements).toHaveLength(1);
+    const sel = parsed.elements[0] as any;
+    expect(sel.kind).toBe('emoji');
+    expect(sel.includeTags).toEqual(['face']);
+    expect(sel.excludeTags).toEqual([]);
+    expect(sel.sizeLimit).toBeUndefined();
+    expect(sel.options).toEqual({ count: '1-3', unique: 'true' });
+  });
+
+  it('number generator tolerates trailing options (ignored)', () => {
+    const pattern = '{number:4 optA=1 optB=yes}';
+    const parsed = PatternParser.parse(pattern);
+
+    expect(parsed.elements).toHaveLength(1);
+    const num = parsed.elements[0] as any;
+    expect(num.maxLength).toBe(4);
+    expect(num.base).toBe(NumberBase.Dec);
+  });
+
+  it('special generator tolerates trailing options (ignored)', () => {
+    const pattern = '{special:3-5 flag=true}';
+    const parsed = PatternParser.parse(pattern);
+
+    expect(parsed.elements).toHaveLength(1);
+    const spec = parsed.elements[0] as any;
+    expect(spec.minLength).toBe(3);
+    expect(spec.maxLength).toBe(5);
+  });
+});
+
+// (duplicate imports removed)
 
 describe('PatternParser', () => {
   describe('Basic parsing', () => {
@@ -109,7 +209,7 @@ describe('PatternParser', () => {
     });
 
     it('should parse selector with options', () => {
-      const result = PatternParser.parse('{noun:case=lower,style=formal}');
+      const result = PatternParser.parse('{noun:case=lower style=formal}');
       const element = result.elements[0];
       expect('options' in element && element.options).toEqual({
         case: 'lower',
@@ -118,7 +218,7 @@ describe('PatternParser', () => {
     });
 
     it('should parse complex selector', () => {
-      const result = PatternParser.parse('{noun@en:+animal -nsfw >3,case=lower}');
+      const result = PatternParser.parse('{noun@en:+animal -nsfw >3 case=lower}');
       const element = result.elements[0];
       expect(element).toMatchObject({
         kind: 'noun',
@@ -150,7 +250,7 @@ describe('PatternParser', () => {
       });
     });
 
-    it('should parse number generator with base', () => {
+    it('should parse number generator with base (legacy comma still supported)', () => {
       const result = PatternParser.parse('{number:5,hex}');
       const element = result.elements[0];
       expect(element).toMatchObject({
@@ -250,8 +350,8 @@ describe('PatternParser', () => {
       });
     });
 
-    it('should parse global settings with options', () => {
-      const result = PatternParser.parse('{noun}[case=lower,style=formal]');
+    it('should parse global settings with options (space-delimited)', () => {
+      const result = PatternParser.parse('{noun}[case=lower style=formal]');
       expect(result.globalSettings?.options).toEqual({
         case: 'lower',
         style: 'formal'
@@ -259,7 +359,7 @@ describe('PatternParser', () => {
     });
 
     it('should parse complex global settings', () => {
-      const result = PatternParser.parse('{noun}[@en +formal -nsfw >3,case=lower]');
+      const result = PatternParser.parse('{noun}[@en +formal -nsfw >3 case=lower]');
       expect(result.globalSettings).toMatchObject({
         language: 'en',
         includeTags: ['formal'],

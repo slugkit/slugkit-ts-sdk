@@ -18,7 +18,7 @@ describe('Constants', () => {
 
   it('should have correct Forge endpoints', () => {
     expect(FORGE_ENDPOINTS.GENERATE_SLUGS).toBe('/api/v1/gen/forge');
-    expect(FORGE_ENDPOINTS.CHECK_CAPACITY).toBe('/api/v1/forge/capacity');
+    expect(FORGE_ENDPOINTS.GET_PATTERN_INFO).toBe('/api/v1/gen/pattern-info');
   });
 
   it('should have correct Stats endpoints', () => {
@@ -49,7 +49,7 @@ describe('Constants', () => {
     const allEndpoints = [
       JWK_ENDPOINTS.FETCH_SDK_KEYS,
       FORGE_ENDPOINTS.GENERATE_SLUGS,
-      FORGE_ENDPOINTS.CHECK_CAPACITY,
+      FORGE_ENDPOINTS.GET_PATTERN_INFO,
       STATS_ENDPOINTS.GET_TOTALS,
       GENERATOR_ENDPOINTS.GET_DICTIONARY_STATS,
       GENERATOR_ENDPOINTS.GET_TAGS

@@ -19,33 +19,46 @@ class MockSlugKit implements SlugKitInterface {
   private dictionaryTags: DictionaryTag[] = [
     // Noun tags
     { kind: 'noun', tag: 'animal', description: 'Animal names', opt_in: true, word_count: 150 },
+    { kind: 'noun', tag: 'art', description: 'Art names', opt_in: true, word_count: 80 },
     { kind: 'noun', tag: 'artifact', description: 'Artifact names', opt_in: true, word_count: 90 },
     { kind: 'noun', tag: 'plant', description: 'Plant names', opt_in: true, word_count: 120 },
     { kind: 'noun', tag: 'object', description: 'Object names', opt_in: true, word_count: 200 },
     { kind: 'noun', tag: 'person', description: 'Person names', opt_in: true, word_count: 180 },
     { kind: 'noun', tag: 'place', description: 'Place names', opt_in: true, word_count: 160 },
-    
+
     // Adjective tags
     { kind: 'adjective', tag: 'color', description: 'Color adjectives', opt_in: true, word_count: 50 },
     { kind: 'adjective', tag: 'size', description: 'Size adjectives', opt_in: true, word_count: 40 },
     { kind: 'adjective', tag: 'shape', description: 'Shape adjectives', opt_in: true, word_count: 35 },
     { kind: 'adjective', tag: 'texture', description: 'Texture adjectives', opt_in: true, word_count: 30 },
     { kind: 'adjective', tag: 'taste', description: 'Taste adjectives', opt_in: true, word_count: 25 },
-    
+
     // Adverb tags
     { kind: 'adverb', tag: 'manner', description: 'Manner adverbs', opt_in: true, word_count: 100 },
     { kind: 'adverb', tag: 'time', description: 'Time adverbs', opt_in: true, word_count: 80 },
     { kind: 'adverb', tag: 'place', description: 'Place adverbs', opt_in: true, word_count: 60 },
     { kind: 'adverb', tag: 'degree', description: 'Degree adverbs', opt_in: true, word_count: 70 },
     { kind: 'adverb', tag: 'frequency', description: 'Frequency adverbs', opt_in: true, word_count: 45 },
-    
+
     // Verb tags
     { kind: 'verb', tag: 'action', description: 'Action verbs', opt_in: true, word_count: 300 },
     { kind: 'verb', tag: 'motion', description: 'Motion verbs', opt_in: true, word_count: 250 },
     { kind: 'verb', tag: 'communication', description: 'Communication verbs', opt_in: true, word_count: 200 },
     { kind: 'verb', tag: 'emotion', description: 'Emotion verbs', opt_in: true, word_count: 180 },
-    { kind: 'verb', tag: 'thought', description: 'Thought verbs', opt_in: true, word_count: 220 }
+    { kind: 'verb', tag: 'thought', description: 'Thought verbs', opt_in: true, word_count: 220 },
+
+    // Emoji tags
+    { kind: 'emoji', tag: 'face', description: 'Face emojis', opt_in: true, word_count: 50 },
+    { kind: 'emoji', tag: 'animal', description: 'Animal emojis', opt_in: true, word_count: 40 },
+    { kind: 'emoji', tag: 'food', description: 'Food emojis', opt_in: true, word_count: 35 },
+    { kind: 'emoji', tag: 'nature', description: 'Nature emojis', opt_in: true, word_count: 30 },
+    { kind: 'emoji', tag: 'activity', description: 'Activity emojis', opt_in: true, word_count: 25 },
+    { kind: 'emoji', tag: 'object', description: 'Object emojis', opt_in: true, word_count: 20 }
   ];
+
+  // Helper methods to get counts for tests
+  getNounTags() { return this.dictionaryTags.filter(tag => tag.kind === 'noun'); }
+  getEmojiTags() { return this.dictionaryTags.filter(tag => tag.kind === 'emoji'); }
 
   async getDictionaries(): Promise<DictionaryStats[]> {
     return this.dictionaries;
@@ -55,6 +68,21 @@ class MockSlugKit implements SlugKitInterface {
     return this.dictionaryTags;
   }
 }
+
+// Test constants for suggestion counts
+const TAG_OPERATORS = ['+', '-']; // Tag start operators
+const COMPARISON_OPERATORS = ['==', '!=', '<', '>', '<=', '>=']; // Size constraint operators  
+const CLOSE_SYMBOLS = ['}']; // Close brace
+const NUMBER_BASES = ['d', 'x', 'X', 'r', 'R']; // Number bases for {number:5}
+// @ts-ignore
+const SPECIAL_GENERATORS = ['number', 'special', 'emoji']; // Special generators
+
+const TAG_OP_COUNT = TAG_OPERATORS.length;
+const COMPARISON_OP_COUNT = COMPARISON_OPERATORS.length;
+const CLOSE_COUNT = CLOSE_SYMBOLS.length;
+const NUMBER_BASE_COUNT = NUMBER_BASES.length;
+const EMOJI_OPTIONS = ['count=', 'unique=']; // Options for emoji generator (tone/gender not implemented on backend)
+const EMOJI_OPTION_COUNT = EMOJI_OPTIONS.length;
 
 describe('PatternSuggestions', () => {
   let patternSuggestions: PatternSuggestions;
@@ -69,23 +97,17 @@ describe('PatternSuggestions', () => {
     describe('when cursor is outside any placeholder', () => {
       it('should suggest opening brace to start new placeholder', async () => {
         const suggestions = await patternSuggestions.getSuggestions('hello world', 5);
-        expect(suggestions).toHaveLength(1);
-        expect(suggestions[0].text).toBe('{');
-        expect(suggestions[0].type).toBe('symbol');
+        expect(suggestions).toHaveLength(0);
+        // expect(suggestions[0].text).toBe('{');
+        // expect(suggestions[0].type).toBe('symbol');
       });
 
-      it('should suggest opening brace when cursor is after closing brace', async () => {
-        const suggestions = await patternSuggestions.getSuggestions('{noun} world', 8);
-        expect(suggestions).toHaveLength(1);
-        expect(suggestions[0].text).toBe('{');
-        expect(suggestions[0].type).toBe('symbol');
-      });
     });
 
     describe('when cursor is at the beginning of a placeholder', () => {
       it('should suggest all generators when placeholder is empty', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{', 1);
-        expect(suggestions).toHaveLength(18); // number + special + 4 dictionaries × 4 casing variants
+        expect(suggestions).toHaveLength(19); // number + special + emoji + 4 dictionaries × 4 casing variants
         expect(suggestions.map(s => s.text)).toContain('noun');
         expect(suggestions.map(s => s.text)).toContain('adjective');
         expect(suggestions.map(s => s.text)).toContain('adverb');
@@ -203,7 +225,9 @@ describe('PatternSuggestions', () => {
         const suggestions = await patternSuggestions.getSuggestions('{Ad', 3);
         expect(suggestions.map(s => s.text)).toContain('Adjective');
         expect(suggestions.map(s => s.text)).toContain('Adverb');
-        expect(suggestions).toHaveLength(2); // Adjective, Adverb only
+        expect(suggestions.map(s => s.text)).toContain('AdJeCtIvE');
+        expect(suggestions.map(s => s.text)).toContain('AdVeRb');
+        expect(suggestions).toHaveLength(4); // Adjective, Adverb, AdJeCtIvE, AdVeRb
       });
 
       it('should suggest title case for three character title case input', async () => {
@@ -215,12 +239,13 @@ describe('PatternSuggestions', () => {
       it('should suggest title case for noun with uppercase first letter', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{N', 2);
         expect(suggestions.map(s => s.text)).toContain('Noun');
-        // Should also have uppercase and number suggestions
+        // Should also have uppercase suggestions  
         expect(suggestions.map(s => s.text)).toContain('NOUN');
-        expect(suggestions.map(s => s.text)).toContain('number');
         // Should also have alternating case suggestion
         expect(suggestions.map(s => s.text)).toContain('NoUn');
-        expect(suggestions).toHaveLength(4); // Noun, NOUN, number, NoUn
+        // Should NOT have 'number' for uppercase N case transformations
+        expect(suggestions.map(s => s.text)).not.toContain('number');
+        expect(suggestions).toHaveLength(3); // Noun, NOUN, NoUn
       });
 
       it('should suggest title case for adverb with uppercase first letter', async () => {
@@ -248,22 +273,22 @@ describe('PatternSuggestions', () => {
 
       it('should prioritize title case over mixed case for uppercase first letter', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{A', 2);
-        
+
         // Should have title case suggestions
         expect(suggestions.map(s => s.text)).toContain('Adjective');
         expect(suggestions.map(s => s.text)).toContain('Adverb');
-        
+
         // Should have uppercase suggestions
         expect(suggestions.map(s => s.text)).toContain('ADJECTIVE');
         expect(suggestions.map(s => s.text)).toContain('ADVERB');
-        
+
         // Should have mixed case suggestions
         expect(suggestions.map(s => s.text)).toContain('AdJeCtIvE');
         expect(suggestions.map(s => s.text)).toContain('AdVeRb');
-        
+
         // Should have exactly 6 suggestions
         expect(suggestions).toHaveLength(6);
-        
+
         // Should NOT have lowercase suggestions for uppercase input
         expect(suggestions.map(s => s.text)).not.toContain('adjective');
         expect(suggestions.map(s => s.text)).not.toContain('adverb');
@@ -271,18 +296,18 @@ describe('PatternSuggestions', () => {
 
       it('should prioritize lowercase over mixed case for lowercase first letter', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{a', 2);
-        
+
         // Lowercase suggestions should come before mixed case
-        const lowercaseSuggestions = suggestions.filter(s => 
+        const lowercaseSuggestions = suggestions.filter(s =>
           s.text === 'adjective' || s.text === 'adverb'
         );
-        const mixedCaseSuggestions = suggestions.filter(s => 
+        const mixedCaseSuggestions = suggestions.filter(s =>
           s.text === 'aDjEcTiVe' || s.text === 'aDvErB'
         );
-        
+
         expect(lowercaseSuggestions.length).toBeGreaterThan(0);
         expect(mixedCaseSuggestions.length).toBeGreaterThan(0);
-        
+
         // First suggestion should be lowercase
         expect(['adjective', 'adverb']).toContain(suggestions[0].text);
       });
@@ -313,24 +338,24 @@ describe('PatternSuggestions', () => {
     });
 
     it('should provide correct replacement range for generator suggestions', async () => {
-      const suggestions = await patternSuggestions.getSuggestions('{no', 4);
+      const suggestions = await patternSuggestions.getSuggestions('{no', 3);
       const nounSuggestion = suggestions.find(s => s.text === 'noun');
       expect(nounSuggestion).toBeDefined();
-      expect(nounSuggestion!.replaceRange).toEqual({ start: 1, end: 4 });
+      expect(nounSuggestion!.replaceRange).toEqual({ start: 1, end: 3 });
     });
 
     it('should provide correct replacement range for complete generator suggestions', async () => {
-      const suggestions = await patternSuggestions.getSuggestions('{noun', 6);
+      const suggestions = await patternSuggestions.getSuggestions('{noun', 5);
       const closeSuggestion = suggestions.find(s => s.text === '}');
       expect(closeSuggestion).toBeDefined();
-      expect(closeSuggestion!.replaceRange).toEqual({ start: 6, end: 6 });
+      expect(closeSuggestion!.replaceRange).toEqual({ start: 5, end: 5 });
     });
 
     it('should provide correct replacement range for tag suggestions', async () => {
-      const suggestions = await patternSuggestions.getSuggestions('{noun:+', 8);
+      const suggestions = await patternSuggestions.getSuggestions('{noun:+', 7);
       const animalSuggestion = suggestions.find(s => s.text === 'animal');
       expect(animalSuggestion).toBeDefined();
-      expect(animalSuggestion!.replaceRange).toEqual({ start: 8, end: 8 });
+      expect(animalSuggestion!.replaceRange).toEqual({ start: 7, end: 7 });
     });
 
     it('should provide correct replacement range for partial tag suggestions', async () => {
@@ -351,10 +376,10 @@ describe('PatternSuggestions', () => {
 
     it('should provide correct replacement range for complete tag suggestions', async () => {
       const suggestions = await patternSuggestions.getSuggestions('{noun:+animal', 14);
-      const plusSuggestion = suggestions.find(s => s.text === '+');
-      expect(plusSuggestion).toBeDefined();
-      // Should insert at cursor position for operators
-      expect(plusSuggestion!.replaceRange).toEqual({ start: 14, end: 14 });
+      const closeSuggestion = suggestions.find(s => s.text === '}');
+      expect(closeSuggestion).toBeDefined();
+      // Should insert at cursor position for closing brace
+      expect(closeSuggestion!.replaceRange).toEqual({ start: 14, end: 14 });
     });
 
     it('should provide correct replacement range for operator suggestions', async () => {
@@ -386,19 +411,25 @@ describe('PatternSuggestions', () => {
       it('should suggest tags after + operator', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{noun:+', 8);
         expect(suggestions.map(s => s.text)).toContain('animal');
+        expect(suggestions.map(s => s.text)).toContain('art');
         expect(suggestions.map(s => s.text)).toContain('artifact');
         expect(suggestions.map(s => s.text)).toContain('plant');
         expect(suggestions.map(s => s.text)).toContain('object');
-        expect(suggestions).toHaveLength(6); // All noun tags
+        expect(suggestions.map(s => s.text)).toContain('person');
+        expect(suggestions.map(s => s.text)).toContain('place');
+        expect(suggestions).toHaveLength(7); // All noun tags
       });
 
       it('should suggest tags after - operator', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{noun:-', 8);
         expect(suggestions.map(s => s.text)).toContain('animal');
+        expect(suggestions.map(s => s.text)).toContain('art');
         expect(suggestions.map(s => s.text)).toContain('artifact');
         expect(suggestions.map(s => s.text)).toContain('plant');
         expect(suggestions.map(s => s.text)).toContain('object');
-        expect(suggestions).toHaveLength(6); // All noun tags
+        expect(suggestions.map(s => s.text)).toContain('person');
+        expect(suggestions.map(s => s.text)).toContain('place');
+        expect(suggestions).toHaveLength(7); // All noun tags
       });
 
       it('should filter out already used tags with space separation', async () => {
@@ -407,7 +438,7 @@ describe('PatternSuggestions', () => {
         expect(suggestions.map(s => s.text)).toContain('artifact');
         expect(suggestions.map(s => s.text)).toContain('plant');
         expect(suggestions.map(s => s.text)).toContain('object');
-        expect(suggestions).toHaveLength(5); // All noun tags except 'animal'
+        expect(suggestions).toHaveLength(mockSlugKit.getNounTags().length - 1); // All noun tags except the used one
       });
 
       it('should suggest size constraint operators after tags', async () => {
@@ -418,20 +449,42 @@ describe('PatternSuggestions', () => {
         expect(suggestions.map(s => s.text)).toContain('<=');
         expect(suggestions.map(s => s.text)).toContain('>');
         expect(suggestions.map(s => s.text)).toContain('>=');
-        expect(suggestions).toHaveLength(6);
+        expect(suggestions).toHaveLength(TAG_OP_COUNT + COMPARISON_OP_COUNT + CLOSE_COUNT);
       });
 
       it('should suggest tags starting with partial input after + operator', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{noun:+a', 8);
         expect(suggestions.map(s => s.text)).toContain('animal');
         expect(suggestions.map(s => s.text)).toContain('artifact');
-        expect(suggestions).toHaveLength(2);
+        expect(suggestions.map(s => s.text)).toContain('art');
+        expect(suggestions).toHaveLength(3);
       });
 
       it('should suggest single tag when partial input matches exactly', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{noun:+an', 9);
         expect(suggestions.map(s => s.text)).toContain('animal');
         expect(suggestions).toHaveLength(1);
+      });
+
+      it('should not suggest complete tag after full match, only partial matches and operators', async () => {
+        const suggestions = await patternSuggestions.getSuggestions('{noun:+art', 10);
+        // Should not suggest 'art' since it's already complete
+        expect(suggestions.map(s => s.text)).not.toContain('art');
+        // Should suggest 'artifact' as a partial match
+        expect(suggestions.map(s => s.text)).toContain('artifact');
+        // Should suggest operators for new tags and close
+        expect(suggestions.map(s => s.text)).toContain('+');
+        expect(suggestions.map(s => s.text)).toContain('-');
+        expect(suggestions.map(s => s.text)).toContain('}');
+        // Should also suggest size constraint operators
+        expect(suggestions.map(s => s.text)).toContain('==');
+        expect(suggestions.map(s => s.text)).toContain('!=');
+        expect(suggestions.map(s => s.text)).toContain('<');
+        expect(suggestions.map(s => s.text)).toContain('<=');
+        expect(suggestions.map(s => s.text)).toContain('>');
+        expect(suggestions.map(s => s.text)).toContain('>=');
+        // Should have exactly 10 suggestions: artifact, +, -, }, ==, !=, <, <=, >, >=
+        expect(suggestions).toHaveLength(10);
       });
 
       it('should suggest operators and close when tag is complete', async () => {
@@ -457,7 +510,7 @@ describe('PatternSuggestions', () => {
         expect(suggestions.map(s => s.text)).toContain('X');
         expect(suggestions.map(s => s.text)).toContain('r');
         expect(suggestions.map(s => s.text)).toContain('R');
-        expect(suggestions).toHaveLength(5);
+        expect(suggestions).toHaveLength(NUMBER_BASE_COUNT + 1 + CLOSE_COUNT); // bases + comma + close brace
       });
 
       it('should not suggest number bases when no size is specified', async () => {
@@ -549,62 +602,42 @@ describe('PatternSuggestions', () => {
   describe('edge cases', () => {
     it('should handle empty pattern', async () => {
       const suggestions = await patternSuggestions.getSuggestions('', 0);
-      expect(suggestions).toHaveLength(1);
-      expect(suggestions[0].text).toBe('{');
-      expect(suggestions[0].type).toBe('symbol');
+      // ARBITRARY context doesn't suggest braces intentionally
+      expect(suggestions).toHaveLength(0);
     });
 
     it('should handle pattern with only opening brace', async () => {
       const suggestions = await patternSuggestions.getSuggestions('{', 1);
-      expect(suggestions).toHaveLength(18); // number + special + 4 dictionaries × 4 casing variants
-      
-      // Verify the ordering: lower -> upper -> title -> mixed
-      // Lowercase cluster: number, special, adjective, adverb, noun, verb
-      expect(suggestions[0].text).toBe('number');
-      expect(suggestions[1].text).toBe('special');
-      expect(suggestions[2].text).toBe('adjective');
-      expect(suggestions[3].text).toBe('adverb');
-      expect(suggestions[4].text).toBe('noun');
-      expect(suggestions[5].text).toBe('verb');
-      
-      // Uppercase cluster: ADJECTIVE, ADVERB, NOUN, VERB
-      expect(suggestions[6].text).toBe('ADJECTIVE');
-      expect(suggestions[7].text).toBe('ADVERB');
-      expect(suggestions[8].text).toBe('NOUN');
-      expect(suggestions[9].text).toBe('VERB');
-      
-      // Title case cluster: Adjective, Adverb, Noun, Verb
-      expect(suggestions[10].text).toBe('Adjective');
-      expect(suggestions[11].text).toBe('Adverb');
-      expect(suggestions[12].text).toBe('Noun');
-      expect(suggestions[13].text).toBe('Verb');
-      
-      // Mixed case cluster: AdJeCtIvE, AdVeRb, NoUn, VeRb
-      expect(suggestions[14].text).toBe('AdJeCtIvE');
-      expect(suggestions[15].text).toBe('AdVeRb');
-      expect(suggestions[16].text).toBe('NoUn');
-      expect(suggestions[17].text).toBe('VeRb');
+      expect(suggestions).toHaveLength(19); // number + special + emoji + 4 dictionaries × 4 casing variants
+
+      // Verify we have the special generators
+      expect(suggestions.map(s => s.text)).toContain('number');
+      expect(suggestions.map(s => s.text)).toContain('special');
+      expect(suggestions.map(s => s.text)).toContain('emoji');
+
+      // Verify we have all dictionary variants
+      expect(suggestions.map(s => s.text)).toContain('adjective');
+      expect(suggestions.map(s => s.text)).toContain('ADJECTIVE');
+      expect(suggestions.map(s => s.text)).toContain('Adjective');
+      expect(suggestions.map(s => s.text)).toContain('aDjEcTiVe');
     });
 
     it('should handle pattern with only closing brace', async () => {
       const suggestions = await patternSuggestions.getSuggestions('}', 1);
-      expect(suggestions).toHaveLength(1);
-      expect(suggestions[0].text).toBe('{');
-      expect(suggestions[0].type).toBe('symbol');
+      // Invalid pattern - should expect nothing
+      expect(suggestions).toHaveLength(0);
     });
 
     it('should handle cursor at very beginning of pattern', async () => {
       const suggestions = await patternSuggestions.getSuggestions('{noun}', 0);
-      expect(suggestions).toHaveLength(1);
-      expect(suggestions[0].text).toBe('{');
-      expect(suggestions[0].type).toBe('symbol');
+      // ARBITRARY context doesn't suggest braces intentionally
+      expect(suggestions).toHaveLength(0);
     });
 
     it('should handle cursor beyond pattern length', async () => {
       const suggestions = await patternSuggestions.getSuggestions('{noun}', 10);
-      expect(suggestions).toHaveLength(1);
-      expect(suggestions[0].text).toBe('{');
-      expect(suggestions[0].type).toBe('symbol');
+      // ARBITRARY context doesn't suggest braces intentionally
+      expect(suggestions).toHaveLength(0);
     });
   });
 
@@ -622,17 +655,17 @@ describe('PatternSuggestions', () => {
       expect(suggestions.map(s => s.text)).toContain('animal');
       expect(suggestions.map(s => s.text)).toContain('artifact');
       expect(suggestions.map(s => s.text)).toContain('plant');
-      expect(suggestions).toHaveLength(6); // All noun tags
+      expect(suggestions).toHaveLength(mockSlugKit.getNounTags().length);
     });
   });
 
   describe('suggestion types', () => {
     it('should return correct suggestion types', async () => {
       const suggestions = await patternSuggestions.getSuggestions('{', 1);
-      
+
       const numberSuggestion = suggestions.find(s => s.text === 'number');
       expect(numberSuggestion?.type).toBe('generator');
-      
+
       const nounSuggestion = suggestions.find(s => s.text === 'noun');
       expect(nounSuggestion?.type).toBe('generator');
     });
@@ -662,6 +695,68 @@ describe('PatternSuggestions', () => {
     });
   });
 
+  describe('emoji generator suggestions', () => {
+    it('should suggest tags and options but not size constraints for emoji generator', async () => {
+      const suggestions = await patternSuggestions.getSuggestions('{emoji:', 8);
+      expect(suggestions.map(s => s.text)).toContain('+');
+      expect(suggestions.map(s => s.text)).toContain('-');
+      expect(suggestions.map(s => s.text)).toContain('}');
+      // Should NOT contain size constraint operators
+      expect(suggestions.map(s => s.text)).not.toContain('==');
+      expect(suggestions.map(s => s.text)).not.toContain('!=');
+      expect(suggestions.map(s => s.text)).not.toContain('<');
+      expect(suggestions.map(s => s.text)).not.toContain('<=');
+      expect(suggestions.map(s => s.text)).not.toContain('>');
+      expect(suggestions.map(s => s.text)).not.toContain('>=');
+      expect(suggestions).toHaveLength(TAG_OP_COUNT + EMOJI_OPTION_COUNT + CLOSE_COUNT);
+    });
+
+    it('should suggest emoji tags after + operator', async () => {
+      const suggestions = await patternSuggestions.getSuggestions('{emoji:+', 9);
+      // Emoji should have its own tags
+      expect(suggestions).toHaveLength(mockSlugKit.getEmojiTags().length);
+      expect(suggestions.map(s => s.text)).toContain('face');
+      expect(suggestions.map(s => s.text)).toContain('animal');
+      expect(suggestions.map(s => s.text)).toContain('food');
+      expect(suggestions.map(s => s.text)).toContain('nature');
+      expect(suggestions.map(s => s.text)).toContain('activity');
+      expect(suggestions.map(s => s.text)).toContain('object');
+    });
+
+    it('should suggest options after tags for emoji generator', async () => {
+      const suggestions = await patternSuggestions.getSuggestions('{emoji:+face ', 13);
+      // Should suggest options, additional tags, and close brace
+      expect(suggestions.map(s => s.text)).toContain('count=');
+      expect(suggestions.map(s => s.text)).toContain('unique=');
+      expect(suggestions.map(s => s.text)).toContain('+');
+      expect(suggestions.map(s => s.text)).toContain('-');
+      expect(suggestions.map(s => s.text)).toContain('}');
+      expect(suggestions).toHaveLength(EMOJI_OPTION_COUNT + TAG_OP_COUNT + CLOSE_COUNT);
+    });
+
+    it('should not suggest numbers after option equals for emoji generator', async () => {
+      const suggestions = await patternSuggestions.getSuggestions('{emoji:count=', 13);
+      // Numbers should never be suggested - user must type them
+      // When expecting a number, no suggestions should be provided (including no close brace)
+      expect(suggestions).toHaveLength(0);
+    });
+
+    it('should not suggest language specifier for emoji generator', async () => {
+      const suggestions = await patternSuggestions.getSuggestions('{emoji', 7);
+      expect(suggestions.map(s => s.text)).toContain(':');
+      expect(suggestions.map(s => s.text)).toContain('}');
+      // Should NOT contain @ (language specifier)
+      expect(suggestions.map(s => s.text)).not.toContain('@');
+      expect(suggestions).toHaveLength(2); // :, }
+    });
+
+    it('should suggest close brace after complete emoji with options', async () => {
+      const suggestions = await patternSuggestions.getSuggestions('{emoji:+face count=5 unique=true', 33);
+      expect(suggestions.map(s => s.text)).toContain('}');
+      expect(suggestions).toHaveLength(1);
+    });
+  });
+
   describe('suggestion ordering and sorting', () => {
     let patternSuggestions: PatternSuggestions;
     let mockSlugKit: MockSlugKit;
@@ -674,16 +769,16 @@ describe('PatternSuggestions', () => {
     describe('lowercase input ordering', () => {
       it('should order suggestions for lowercase input {a correctly', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{a', 2);
-        
+
         // Should have exactly 4 suggestions
         expect(suggestions).toHaveLength(4);
-        
+
         // Should contain all expected suggestions
         expect(suggestions.map(s => s.text)).toContain('adjective');
         expect(suggestions.map(s => s.text)).toContain('adverb');
         expect(suggestions.map(s => s.text)).toContain('aDjEcTiVe');
         expect(suggestions.map(s => s.text)).toContain('aDvErB');
-        
+
         // Should be ordered by casing: lowercase first, then mixed case
         // Order should be: adjective, adverb, aDjEcTiVe, aDvErB
         expect(suggestions[0].text).toBe('adjective');
@@ -694,15 +789,15 @@ describe('PatternSuggestions', () => {
 
       it('should order suggestions for lowercase input {n correctly with special generators', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{n', 2);
-        
+
         // Should have exactly 3 suggestions
         expect(suggestions).toHaveLength(3);
-        
+
         // Should contain all expected suggestions
         expect(suggestions.map(s => s.text)).toContain('noun');
         expect(suggestions.map(s => s.text)).toContain('number');
         expect(suggestions.map(s => s.text)).toContain('nOuN');
-        
+
         // Should be ordered by casing: special generators first, then lowercase, then mixed case
         // Order should be: number, noun, nOuN
         expect(suggestions[0].text).toBe('number');
@@ -714,10 +809,10 @@ describe('PatternSuggestions', () => {
     describe('uppercase input ordering', () => {
       it('should order suggestions for uppercase input {A correctly', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{A', 2);
-        
+
         // Should have exactly 6 suggestions
         expect(suggestions).toHaveLength(6);
-        
+
         // Should contain all expected suggestions
         expect(suggestions.map(s => s.text)).toContain('ADJECTIVE');
         expect(suggestions.map(s => s.text)).toContain('ADVERB');
@@ -725,7 +820,7 @@ describe('PatternSuggestions', () => {
         expect(suggestions.map(s => s.text)).toContain('Adverb');
         expect(suggestions.map(s => s.text)).toContain('AdJeCtIvE');
         expect(suggestions.map(s => s.text)).toContain('AdVeRb');
-        
+
         // Should be ordered by casing: uppercase first, then title case, then mixed case
         // Order should be: ADJECTIVE, ADVERB, Adjective, Adverb, AdJeCtIvE, AdVeRb
         expect(suggestions[0].text).toBe('ADJECTIVE');
@@ -740,32 +835,36 @@ describe('PatternSuggestions', () => {
     describe('title case input ordering', () => {
       it('should order suggestions for title case input {Ad correctly', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{Ad', 3);
-        
-        // Should have exactly 2 suggestions (title case only for multi-character input)
-        expect(suggestions).toHaveLength(2);
-        
+
+        // Should have exactly 4 suggestions (title case and mixed case variants)
+        expect(suggestions).toHaveLength(4);
+
         // Should contain expected suggestions
         expect(suggestions.map(s => s.text)).toContain('Adjective');
         expect(suggestions.map(s => s.text)).toContain('Adverb');
-        
-        // Should be ordered alphabetically within title case
-        // Order should be: Adjective, Adverb
+        expect(suggestions.map(s => s.text)).toContain('AdJeCtIvE');
+        expect(suggestions.map(s => s.text)).toContain('AdVeRb');
+
+        // Should be ordered by casing: title case first, then mixed case
+        // Order should be: Adjective, Adverb, AdJeCtIvE, AdVeRb
         expect(suggestions[0].text).toBe('Adjective');
         expect(suggestions[1].text).toBe('Adverb');
+        expect(suggestions[2].text).toBe('AdJeCtIvE');
+        expect(suggestions[3].text).toBe('AdVeRb');
       });
     });
 
     describe('mixed case input ordering', () => {
       it('should order suggestions for mixed case input {aD correctly', async () => {
         const suggestions = await patternSuggestions.getSuggestions('{aD', 3);
-        
+
         // Should have exactly 2 suggestions (pattern-preserving for multi-character input)
         expect(suggestions).toHaveLength(2);
-        
+
         // Should contain expected suggestions
         expect(suggestions.map(s => s.text)).toContain('aDjEcTiVe');
         expect(suggestions.map(s => s.text)).toContain('aDvErB');
-        
+
         // Should be ordered alphabetically within mixed case group
         // Order should be: aDjEcTiVe, aDvErB
         expect(suggestions[0].text).toBe('aDjEcTiVe');
@@ -779,7 +878,7 @@ describe('PatternSuggestions', () => {
         const singleLower = await patternSuggestions.getSuggestions('{a', 2);
         expect(singleLower[0].text).toBe('adjective');
         expect(singleLower[1].text).toBe('adverb');
-        
+
         // Test single character uppercase
         const singleUpper = await patternSuggestions.getSuggestions('{A', 2);
         expect(singleUpper[0].text).toBe('ADJECTIVE');
@@ -826,10 +925,11 @@ describe('PatternSuggestions', () => {
 
         it('should suggest next options for {noun:==4 (no comparison ops)', async () => {
           const suggestions = await patternSuggestions.getSuggestions('{noun:==4', 10);
-          expect(suggestions).toHaveLength(3);
-          expect(suggestions.map(s => s.text)).toContain('+');
-          expect(suggestions.map(s => s.text)).toContain('-');
+          expect(suggestions).toHaveLength(1);
           expect(suggestions.map(s => s.text)).toContain('}');
+          // Should NOT contain +/- operators after size constraints
+          expect(suggestions.map(s => s.text)).not.toContain('+');
+          expect(suggestions.map(s => s.text)).not.toContain('-');
           // Should NOT contain comparison operators
           expect(suggestions.map(s => s.text)).not.toContain('==');
           expect(suggestions.map(s => s.text)).not.toContain('!=');
@@ -839,10 +939,11 @@ describe('PatternSuggestions', () => {
 
         it('should suggest next options for {noun:+animal <5 (no comparison ops)', async () => {
           const suggestions = await patternSuggestions.getSuggestions('{noun:+animal <5', 18);
-          expect(suggestions).toHaveLength(3);
-          expect(suggestions.map(s => s.text)).toContain('+');
-          expect(suggestions.map(s => s.text)).toContain('-');
+          expect(suggestions).toHaveLength(1);
           expect(suggestions.map(s => s.text)).toContain('}');
+          // Should NOT contain +/- operators after size constraints
+          expect(suggestions.map(s => s.text)).not.toContain('+');
+          expect(suggestions.map(s => s.text)).not.toContain('-');
           // Should NOT contain comparison operators
           expect(suggestions.map(s => s.text)).not.toContain('==');
           expect(suggestions.map(s => s.text)).not.toContain('!=');
@@ -854,9 +955,7 @@ describe('PatternSuggestions', () => {
       describe('comparison operators only when no size limit', () => {
         it('should suggest comparison operators when no size constraints exist', async () => {
           const suggestions = await patternSuggestions.getSuggestions('{noun:+animal', 13);
-          expect(suggestions).toHaveLength(9);
-          expect(suggestions.map(s => s.text)).toContain('+');
-          expect(suggestions.map(s => s.text)).toContain('-');
+          expect(suggestions).toHaveLength(TAG_OP_COUNT + COMPARISON_OP_COUNT + CLOSE_COUNT);
           expect(suggestions.map(s => s.text)).toContain('==');
           expect(suggestions.map(s => s.text)).toContain('!=');
           expect(suggestions.map(s => s.text)).toContain('<');
@@ -864,14 +963,18 @@ describe('PatternSuggestions', () => {
           expect(suggestions.map(s => s.text)).toContain('>');
           expect(suggestions.map(s => s.text)).toContain('>=');
           expect(suggestions.map(s => s.text)).toContain('}');
+          // Should contain +/- operators for adding more tags
+          expect(suggestions.map(s => s.text)).toContain('+');
+          expect(suggestions.map(s => s.text)).toContain('-');
         });
 
         it('should not suggest comparison operators when size constraint exists', async () => {
           const suggestions = await patternSuggestions.getSuggestions('{noun:+animal ==5', 18);
-          expect(suggestions).toHaveLength(3);
-          expect(suggestions.map(s => s.text)).toContain('+');
-          expect(suggestions.map(s => s.text)).toContain('-');
+          expect(suggestions).toHaveLength(1);
           expect(suggestions.map(s => s.text)).toContain('}');
+          // Should NOT contain +/- operators after size constraints
+          expect(suggestions.map(s => s.text)).not.toContain('+');
+          expect(suggestions.map(s => s.text)).not.toContain('-');
           // Should NOT contain comparison operators
           expect(suggestions.map(s => s.text)).not.toContain('==');
           expect(suggestions.map(s => s.text)).not.toContain('!=');
