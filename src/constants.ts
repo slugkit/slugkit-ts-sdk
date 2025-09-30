@@ -21,10 +21,18 @@ export const JWK_ENDPOINTS = {
 export const FORGE_ENDPOINTS = {
   /** Generate random slugs from a pattern */
   GENERATE_SLUGS: `${API_VERSION}/gen/forge`,
-  /** Check pattern capacity */
-  CHECK_CAPACITY: `${API_VERSION}/forge/capacity`,
   /** Get pattern info */
   GET_PATTERN_INFO: `${API_VERSION}/gen/pattern-info`,
+} as const;
+
+/**
+ * Series endpoints for managing series and minting/slicing slugs
+ */
+export const SERIES_ENDPOINTS = {
+  /** Mint slugs from a series */
+  MINT: `${API_VERSION}/gen/mint`,
+  /** Slice (preview) slugs from a series */
+  SLICE: `${API_VERSION}/gen/slice`,
 } as const;
 
 /**
@@ -62,6 +70,7 @@ export const SHORTEN_ENDPOINTS = {
 export const API_ENDPOINTS = {
   JWK: JWK_ENDPOINTS,
   FORGE: FORGE_ENDPOINTS,
+  SERIES: SERIES_ENDPOINTS,
   STATS: STATS_ENDPOINTS,
   GENERATOR: GENERATOR_ENDPOINTS,
   SHORTEN: SHORTEN_ENDPOINTS,

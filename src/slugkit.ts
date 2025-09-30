@@ -1,10 +1,11 @@
 import { DictionaryStats, DictionaryTag, PatternInfo, ShortenPatternRequest, ShortenPatternResponse } from './types';
-import { JWK_ENDPOINTS, FORGE_ENDPOINTS, STATS_ENDPOINTS, GENERATOR_ENDPOINTS, SHORTEN_ENDPOINTS } from './constants';
+import { JWK_ENDPOINTS, FORGE_ENDPOINTS, SERIES_ENDPOINTS, STATS_ENDPOINTS, GENERATOR_ENDPOINTS, SHORTEN_ENDPOINTS } from './constants';
 
 export class SlugKit {
     private backend!: string;
     private sdkSlug!: string;
     private privateKey!: CryptoKey;
+    private apiKey?: string;
     private refreshTimeout: NodeJS.Timeout | null = null;
     
     // Cache for dictionary data
@@ -116,6 +117,13 @@ export class SlugKit {
         }
     }
     
+    public static fromApiKey(backend: string, apiKey: string): SlugKit {
+        const slugkit = new SlugKit();
+        slugkit.backend = backend;
+        slugkit.apiKey = apiKey;
+        return slugkit;
+    }
+    
     private static base64urlEncode(data: Uint8Array): string {
         const base64 = btoa(String.fromCharCode(...data));
         return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -170,16 +178,21 @@ export class SlugKit {
     }
 
     private async fetch(method: string, path: string, body: string): Promise<Response> {
-        const headers: Record<string, string> = {'Content-Type': 'application/json'};
-        const timestamp = new Date().toISOString();
-        try {
-            const signature = await this.signRequest(method, path, timestamp);
-            headers['X-Timestamp'] = timestamp;
-            headers['X-Sdk-Slug'] = this.sdkSlug;
-            headers['X-Signature'] = signature;
-        } catch (error) {
-            this.error('Failed to sign request:', error);
-            throw new Error('Failed to sign request: ' + (error instanceof Error ? error.message : String(error)));
+        const headers: Record<string, string> = {'content-type': 'application/json'};
+        
+        if (this.apiKey) {
+            headers['x-api-key'] = this.apiKey;
+        } else {
+            const timestamp = new Date().toISOString();
+            try {
+                const signature = await this.signRequest(method, path, timestamp);
+                headers['x-timestamp'] = timestamp;
+                headers['x-sdk-slug'] = this.sdkSlug;
+                headers['x-signature'] = signature;
+            } catch (error) {
+                this.error('Failed to sign request:', error);
+                throw new Error('Failed to sign request: ' + (error instanceof Error ? error.message : String(error)));
+            }
         }
 
         try {
@@ -202,19 +215,25 @@ export class SlugKit {
                 // Handle specific HTTP status codes
                 switch (response.status) {
                     case 401:
-                        throw new Error('Authentication failed: ' + errorMessage);
                     case 403:
-                        // Try to refresh the key and retry the request
-                        this.log('Received 403, attempting to refresh key');
-                        await this.refresh(undefined);
-                        // Retry the request with the new key
-                        const newSignature = await this.signRequest(method, path, timestamp);
-                        headers['X-Signature'] = newSignature;
-                        const retryResponse = await fetch(`${this.backend}${path}`, {method, headers, body});
-                        if (!retryResponse.ok) {
-                            throw new Error('Request failed after key refresh: ' + errorMessage);
+                        if (this.apiKey) {
+                            // For API key mode, don't attempt refresh
+                            throw new Error('Authentication failed: ' + errorMessage);
+                        } else {
+                            // For JWK mode, try to refresh the key and retry the request
+                            this.log(`Received ${response.status}, attempting to refresh key`);
+                            await this.refresh(undefined);
+                            // Retry the request with the new key
+                            const newTimestamp = new Date().toISOString();
+                            const newSignature = await this.signRequest(method, path, newTimestamp);
+                            headers['x-timestamp'] = newTimestamp;
+                            headers['x-signature'] = newSignature;
+                            const retryResponse = await fetch(`${this.backend}${path}`, {method, headers, body});
+                            if (!retryResponse.ok) {
+                                throw new Error('Request failed after key refresh: ' + errorMessage);
+                            }
+                            return retryResponse;
                         }
-                        return retryResponse;
                     case 404:
                         throw new Error('Resource not found: ' + errorMessage);
                     case 429:
@@ -255,17 +274,39 @@ export class SlugKit {
         }
     }
 
-    /**
-     * @deprecated Use getPatternInfo() instead, which provides more comprehensive pattern information
-     */
-    public async checkCapacity(pattern: string): Promise<number> {
-        const body = {pattern};
-        const bodyString = JSON.stringify(body);
-        const response = await this.fetch('POST', FORGE_ENDPOINTS.CHECK_CAPACITY, bodyString);
-        // TODO: handle errors
-        const data = await response.json();
-        return typeof data === 'string' ? Number(data) : 0;
+    public async mintSlugs(seriesSlug: string | undefined, count: number, batchSize: number = 1000): Promise<string[]> {
+        try {
+            const body: Record<string, any> = {count, batch_size: batchSize};
+            if (seriesSlug) {
+                body['series_slug'] = seriesSlug;
+            }
+            const bodyString = JSON.stringify(body);
+            const response = await this.fetch('POST', SERIES_ENDPOINTS.MINT, bodyString);
+            const data = await response.json();
+            return Array.isArray(data) ? data : [];
+        } catch (error) {
+            this.error('Failed to mint slugs:', error);
+            throw error;
+        }
     }
+
+    public async sliceSlugs(seriesSlug: string | undefined, count: number, batchSize: number = 1000, sequence: number = 0): Promise<string[]> {
+        try {
+            const body: Record<string, any> = {count, batch_size: batchSize, sequence};
+            if (seriesSlug) {
+                body['series_slug'] = seriesSlug;
+            }
+            const bodyString = JSON.stringify(body);
+            const response = await this.fetch('POST', SERIES_ENDPOINTS.SLICE, bodyString);
+            const data = await response.json();
+            return Array.isArray(data) ? data : [];
+        } catch (error) {
+            this.error('Failed to slice slugs:', error);
+            throw error;
+        }
+    }
+
+    // Removed legacy checkCapacity in favor of getPatternInfo()
 
     public async getPatternInfo(pattern: string): Promise<PatternInfo> {
         const body = {pattern};
