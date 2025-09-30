@@ -1,6 +1,6 @@
 {
   "name": "@slugkit/sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SlugKit SDK for JavaScript/TypeScript applications",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -23,7 +23,6 @@
     "test:watch": "jest --watch"
   },
   "keywords": ["slugkit", "sdk", "api"],
-  "private": true,
   "devDependencies": {
     "typescript": "^5.0.0",
     "@types/jest": "^29.5.0",
